@@ -3,7 +3,17 @@ entries:
   tomcat-chart:
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2023-08-05T13:21:17.890715944Z"
+    created: "2023-08-05T13:21:54.365039616Z"
+    description: A Helm chart for tomcat
+    digest: 99a0c72616851ff8b1ec411e982dae280c2bc6395593ef8c877cd13712469ccc
+    name: tomcat-chart
+    type: application
+    urls:
+    - tomcat-chart-v0.1.1-9.tgz
+    version: v0.1.1-9
+  - apiVersion: v2
+    appVersion: 1.16.0
+    created: "2023-08-05T13:21:54.364359625Z"
     description: A Helm chart for tomcat
     digest: 819c1c07a53d9385e0d09d2521185bfa87d882039f174c726ae6da2da327cc3b
     name: tomcat-chart
@@ -13,7 +23,7 @@ entries:
     version: v0.1.1-8
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2023-08-05T13:21:17.890020288Z"
+    created: "2023-08-05T13:21:54.36368627Z"
     description: A Helm chart for tomcat
     digest: 9dc4cd6a1fba5f94309a6744651f35529823c4180d4c1f74713d1cf60682c77f
     name: tomcat-chart
@@ -23,7 +33,7 @@ entries:
     version: v0.1.1-7
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2023-08-05T13:21:17.88967119Z"
+    created: "2023-08-05T13:21:54.36341537Z"
     description: A Helm chart for tomcat
     digest: bbd958fa8af264597d8bc702df0867ed4a7daf64f7bc9fcfaea687c8c764ded3
     name: tomcat-chart
@@ -33,7 +43,7 @@ entries:
     version: v0.1.1-6
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2023-08-05T13:21:17.889049707Z"
+    created: "2023-08-05T13:21:54.363135133Z"
     description: A Helm chart for tomcat
     digest: 9a55598f79ff3266a17f5cf99010d116f6adc73ff84c4e9c57552f9ae4c5cb8e
     name: tomcat-chart
@@ -43,7 +53,7 @@ entries:
     version: v0.1.1-5
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2023-08-05T13:21:17.888767522Z"
+    created: "2023-08-05T13:21:54.362853896Z"
     description: A Helm chart for tomcat
     digest: 955ac1933a8d9e82db91125441beef9d4acda684170238fc154f91696c4e4588
     name: tomcat-chart
@@ -51,4 +61,4 @@ entries:
     urls:
     - tomcat-chart-v0.1.1-4.tgz
     version: v0.1.1-4
-generated: "2023-08-05T13:21:17.888260675Z"
+generated: "2023-08-05T13:21:54.362380939Z"
