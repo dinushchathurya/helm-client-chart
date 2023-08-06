@@ -27,7 +27,7 @@ jobs:
       - name: Package Helm Chart
         uses: docker://projectoss/helm-client:v3.11.3
         with:
-            args: | 
+            run: | 
                 helm version
                 helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
       
