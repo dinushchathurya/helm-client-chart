@@ -1,0 +1,61 @@
+name: Deploy Helm Chart
+
+on:
+  push:
+    branches:
+      - master
+
+permissions: write-all
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Check Helm version
+        uses: docker://projectoss/helm-client:v3.11.3
+        with:
+          args: helm version
+
+    #   - name: Generate Random Semantic Version
+    #     id: random-version
+    #     run: echo "::set-output name=version::$(echo v0.$((1 + RANDOM % 9)).$((1 + RANDOM % 9)))-${{ github.run_number }}"
+        
+    #   - name: Package Helm Chart
+    #     run: |
+    #       helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
+            
+    #   - name: Copy chart file
+    #     run: |
+    #       mkdir -p ./my-charts
+    #       cp ${{ github.workspace }}/tomcat-chart-${{ steps.random-version.outputs.version }}.tgz ./my-charts/
+      
+    #   - name: Archive chart file
+    #     uses: actions/upload-artifact@v2
+    #     with:
+    #       name: my-charts
+    #       path: ./my-charts
+
+    #   - name: Checkout gh-pages branch
+    #     uses: actions/checkout@v2
+    #     with:
+    #       ref: gh-pages
+      
+    #   - name: Download chart file
+    #     uses: actions/download-artifact@v2
+    #     with:
+    #       name: my-charts
+      
+    #   - name: Update chart repo index in gh-pages branch
+    #     run: |
+    #       helm repo index --merge index.yaml .
+    #       git config --local user.email "actions@github.com"
+    #       git config --local user.name "GitHub Actions"
+    #       git add .
+    #       git commit -m "feat: Update chart index with version ${{ steps.random-version.outputs.version }}"
+    #       git push https://dinushchathurya:${{ secrets.PAT_TOKEN }}@github.com/dinushchathurya/tomcat-helm-multi-env.git HEAD:gh-pages -f
+      
+
