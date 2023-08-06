@@ -22,7 +22,7 @@ pipeline {
         stage('Package Helm Chart') {
             agent {
                 docker {
-                    image 'limarktest/helm-client:0b0f49e'
+                    image 'projectoss/helm-client:v3.11.3'
                 }
             }
             steps {
@@ -34,7 +34,7 @@ pipeline {
         stage('Update chart repo index and chart') {
             agent {
                 docker {
-                    image 'limarktest/helm-client:0b0f49e'
+                    image 'projectoss/helm-client:v3.11.3'
                 }
             }
             steps {
