@@ -30,14 +30,12 @@ jobs:
             args: helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
       
       - name: Update chart repo index in gh-pages branch
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           helm repo index --merge index.yaml .
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
           git add .
           git commit -m "feat: Update chart index with version ${{ steps.random-version.outputs.version }}"
-          git push https://dinushchathurya:$PAT_TOKEN@github.com/dinushchathurya/tomcat-helm-multi-env.git HEAD:main -f
+          git push https://dinushchathurya:${{ secrets.PAT_TOKEN }}@github.com/dinushchathurya/tomcat-helm-multi-env.git HEAD:main -f
       
 
