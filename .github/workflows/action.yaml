@@ -27,7 +27,9 @@ jobs:
       - name: Package Helm Chart
         uses: docker://projectoss/helm-client:v3.11.3
         with:
-            args: helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
+            args: | 
+                helm version
+                helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
       
       - name: Update chart repo index in gh-pages branch
         run: |
