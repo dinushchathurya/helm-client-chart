@@ -15,11 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Check Helm version
-        uses: docker://projectoss/helm-client:v3.11.3
-        with:
-          args: helm version
-
       - name: Generate Random Semantic Version
         id: random-version
         run: echo "::set-output name=version::$(echo v0.$((1 + RANDOM % 9)).$((1 + RANDOM % 9)))-${{ github.run_number }}"
@@ -27,9 +22,9 @@ jobs:
       - name: Package Helm Chart
         uses: docker://projectoss/helm-client:v3.11.3
         with:
-            run: | 
-                helm version
-                helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
+          run: | 
+            helm version
+            helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
       
       - name: Update chart repo index in gh-pages branch
         run: |
