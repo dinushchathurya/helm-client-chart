@@ -10,29 +10,33 @@ permissions: write-all
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
 
+    steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Generate Random Semantic Version
         id: random-version
-        run: echo "::set-output name=version::$(echo v0.$((1 + RANDOM % 9)).$((1 + RANDOM % 9)))-${{ github.run_number }}"
-        
+        shell: bash
+        run: |
+          VERSION="v0.$((1 + RANDOM % 9)).$((1 + RANDOM % 9))-${GITHUB_RUN_NUMBER}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
       - name: Package Helm Chart
         uses: docker://projectoss/helm-client:dev-6f0b4c7
         with:
-          run: | 
+          run: |
             helm version
-            helm package --version ${{ steps.random-version.outputs.version }} ./tomcat-chart
-      
+            helm package \
+              --version "${{ steps.random-version.outputs.version }}" \
+              ./tomcat-chart
+
       - name: Update chart repo index in gh-pages branch
         run: |
           helm repo index --merge index.yaml .
           git config --local user.email "actions@github.com"
           git config --local user.name "GitHub Actions"
           git add .
-          git commit -m "feat: Update chart index with version ${{ steps.random-version.outputs.version }}"
+          git commit -m "feat: Update chart index with version ${{ steps.random-version.outputs.version }}" || echo "No changes to commit"
           git push https://dinushchathurya:${{ secrets.PAT_TOKEN }}@github.com/dinushchathurya/helm-client-chart.git HEAD:master -f
-      
-
