@@ -20,7 +20,7 @@ jobs:
         run: echo "::set-output name=version::$(echo v0.$((1 + RANDOM % 9)).$((1 + RANDOM % 9)))-${{ github.run_number }}"
         
       - name: Package Helm Chart
-        uses: docker://projectoss/helm-client:dev-6f0b4c7 
+        uses: docker://projectoss/helm-client:dev-6f0b4c7
         with:
           run: | 
             helm version
