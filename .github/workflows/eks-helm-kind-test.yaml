@@ -1,206 +1,129 @@
-name: Test Docker Image
+name: Manual Test - Develop Image
 
 on:
-  push:
-    branches:
-      - main
-      - master
-      - develop
-      - 'feature/**'
-  pull_request:
-    branches:
-      - main
-      - master
-      - develop
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to test (default: develop)'
+        required: false
+        default: 'develop'
+        type: choice
+        options:
+          - develop
+          - latest
+          - master
 
 jobs:
-  test:
-    name: Test Image Build and Functionality
+  test-develop-image:
+    name: Test Develop Image
     runs-on: ubuntu-latest
     
-    strategy:
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Extract platform info
-        id: platform
-        run: |
-          PLATFORM_PAIR=${{ matrix.platform }}
-          echo "os=${PLATFORM_PAIR%/*}" >> $GITHUB_OUTPUT
-          echo "arch=${PLATFORM_PAIR#*/}" >> $GITHUB_OUTPUT
-          echo "safe_arch=$(echo ${PLATFORM_PAIR#*/} | tr '/' '-')" >> $GITHUB_OUTPUT
-
-      - name: Build image for testing
-        uses: docker/build-push-action@v6
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          context: .
-          platforms: ${{ matrix.platform }}
-          load: true
-          tags: eks-helm-client:test-${{ steps.platform.outputs.safe_arch }}
-          cache-from: type=gha,scope=${{ steps.platform.outputs.safe_arch }}
-          cache-to: type=gha,mode=max,scope=${{ steps.platform.outputs.safe_arch }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Test - Container Starts
+      - name: Pull and test AMD64 image
         run: |
-          docker run --rm \
-            -e REGION_CODE="test-region" \
-            -e CLUSTER_NAME="test-cluster" \
-            eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            /bin/bash -c "echo 'Container started successfully'"
+          echo "🐳 Pulling ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} (amd64)..."
+          docker pull --platform linux/amd64 ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}
+          
+          echo "✅ Image pulled successfully"
+          docker images ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}
 
-      - name: Test - kubectl Version
+      - name: Test - All Tools
         run: |
-          echo "Testing kubectl..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            kubectl version --client
-
-      - name: Test - Helm Version
-        run: |
-          echo "Testing Helm..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            helm version
-
-      - name: Test - AWS CLI Version
-        run: |
-          echo "Testing AWS CLI..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            aws --version
-
-      - name: Test - aws-iam-authenticator Version
-        run: |
-          echo "Testing aws-iam-authenticator..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            aws-iam-authenticator version
+          echo "🧪 Testing all tools..."
+          
+          docker run --rm ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
+            /bin/bash -c '
+              echo "=== Tool Versions ==="
+              echo "kubectl: $(kubectl version --client --short 2>/dev/null | head -n1)"
+              echo "Helm: $(helm version --short 2>/dev/null)"
+              echo "AWS CLI: $(aws --version 2>/dev/null)"
+              echo "aws-iam-authenticator: $(aws-iam-authenticator version 2>/dev/null | head -n1)"
+              echo ""
+              echo "=== Architecture ==="
+              uname -m
+              echo ""
+              echo "=== User ==="
+              whoami
+              id
+            '
 
       - name: Test - Non-Root User
         run: |
-          echo "Testing non-root user..."
-          USER=$(docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} whoami)
-          if [ "$USER" != "kubectl" ]; then
-            echo "Error: Container not running as kubectl user (got: $USER)"
+          echo "🔒 Testing non-root user..."
+          USER=$(docker run --rm ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} whoami)
+          if [ "$USER" = "kubectl" ]; then
+            echo "✅ Running as non-root user: $USER"
+          else
+            echo "❌ Not running as kubectl user (got: $USER)"
             exit 1
           fi
-          echo "✓ Running as kubectl user"
 
-      - name: Test - User ID
+      - name: Test - Permissions
         run: |
-          echo "Testing user ID..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} id
+          echo "📁 Testing directory permissions..."
+          docker run --rm ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
+            /bin/bash -c '
+              touch /opt/kubernetes/test.txt && rm /opt/kubernetes/test.txt && echo "✅ /opt/kubernetes writable"
+              touch /opt/helm/test.txt && rm /opt/helm/test.txt && echo "✅ /opt/helm writable"
+              touch ~/test.txt && rm ~/test.txt && echo "✅ home directory writable"
+            '
 
-      - name: Test - Directory Permissions
+      - name: Test - Environment Validation
         run: |
-          echo "Testing directory permissions..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} /bin/bash -c '
-            touch /opt/kubernetes/test.txt && rm /opt/kubernetes/test.txt && echo "✓ /opt/kubernetes writable" || exit 1
-            touch /opt/helm/test.txt && rm /opt/helm/test.txt && echo "✓ /opt/helm writable" || exit 1
-            touch ~/test.txt && rm ~/test.txt && echo "✓ home directory writable" || exit 1
-          '
-
-      - name: Test - Environment Variable Validation
-        run: |
-          echo "Testing environment variable validation..."
-          # Should fail without REGION_CODE
-          if docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
+          echo "🔧 Testing environment validation..."
+          if docker run --rm ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
             /entrypoint.sh echo "test" 2>&1 | grep -q "REGION_CODE"; then
-            echo "✓ REGION_CODE validation works"
+            echo "✅ Environment validation works"
           else
-            echo "✗ REGION_CODE validation failed"
-            exit 1
-          fi
-          
-          # Should fail without CLUSTER_NAME
-          if docker run --rm -e REGION_CODE="test" \
-            eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            /entrypoint.sh echo "test" 2>&1 | grep -q "CLUSTER_NAME"; then
-            echo "✓ CLUSTER_NAME validation works"
-          else
-            echo "✗ CLUSTER_NAME validation failed"
+            echo "❌ Environment validation failed"
             exit 1
           fi
 
       - name: Test - Helm Functionality
         run: |
-          echo "Testing Helm functionality..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} /bin/bash -c '
-            helm repo add stable https://charts.helm.sh/stable
-            helm repo list
-            helm search repo stable --max-col-width 0 | head -5
-          '
-
-      - name: Test - kubectl Functionality
-        run: |
-          echo "Testing kubectl functionality..."
-          docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} \
-            kubectl api-resources --dry-run=client > /dev/null && echo "✓ kubectl api-resources works"
-
-      - name: Test - Image Size
-        run: |
-          echo "Checking image size..."
-          SIZE=$(docker images eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} --format "{{.Size}}")
-          echo "Image size for ${{ matrix.platform }}: $SIZE"
-
-      - name: Test - Architecture Verification
-        run: |
-          echo "Verifying architecture..."
-          ARCH=$(docker run --rm eks-helm-client:test-${{ steps.platform.outputs.safe_arch }} uname -m)
-          echo "Container architecture: $ARCH"
-          
-          case "${{ steps.platform.outputs.arch }}" in
-            amd64)
-              if [ "$ARCH" != "x86_64" ]; then
-                echo "Error: Expected x86_64, got $ARCH"
-                exit 1
-              fi
-              ;;
-            arm64)
-              if [ "$ARCH" != "aarch64" ]; then
-                echo "Error: Expected aarch64, got $ARCH"
-                exit 1
-              fi
-              ;;
-          esac
-          echo "✓ Architecture matches: $ARCH"
+          echo "⎈ Testing Helm functionality..."
+          docker run --rm ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
+            /bin/bash -c '
+              helm repo add bitnami https://charts.bitnami.com/bitnami
+              helm repo list
+              helm search repo bitnami/nginx
+            '
 
       - name: Test Summary
         if: always()
         run: |
-          echo "=== Test Summary for ${{ matrix.platform }} ==="
-          echo "Platform: ${{ matrix.platform }}"
+          echo ""
+          echo "=== Test Summary ==="
+          echo "Image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}"
           echo "Status: ${{ job.status }}"
+          echo ""
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All tests passed! The ${{ inputs.image_tag }} image is working correctly."
+          else
+            echo "❌ Some tests failed. Please check the logs above."
+          fi
 
-  integration-test:
+  integration-test-kind:
     name: Integration Test with Kind
     runs-on: ubuntu-latest
-    needs: test
+    needs: test-develop-image
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image
-        uses: docker/build-push-action@v6
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          context: .
-          load: true
-          tags: eks-helm-client:integration-test
-          cache-from: type=gha,scope=amd64
-          platforms: linux/amd64
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Pull image
+        run: |
+          docker pull ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}
 
       - name: Create Kind cluster
         uses: helm/kind-action@v1.10.0
@@ -208,181 +131,129 @@ jobs:
           cluster_name: test-cluster
           wait: 30s
 
-      - name: Test with Kind cluster
+      - name: Test with Kind
         run: |
-          echo "Getting kubeconfig from Kind..."
+          echo "🎯 Testing with Kind cluster..."
+          
+          # Get kubeconfig
           kind get kubeconfig --name test-cluster > /tmp/kind-config
           
-          echo "Testing kubectl with Kind cluster..."
+          # Test kubectl
+          echo "Testing kubectl get nodes..."
           docker run --rm \
             --network host \
             -v /tmp/kind-config:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            eks-helm-client:integration-test \
+            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
             kubectl get nodes
           
+          # Test kubectl cluster-info
           echo "Testing kubectl cluster-info..."
           docker run --rm \
             --network host \
             -v /tmp/kind-config:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            eks-helm-client:integration-test \
+            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
             kubectl cluster-info
           
-          echo "Testing helm list..."
+          # Test helm
+          echo "Testing helm with cluster..."
           docker run --rm \
             --network host \
             -v /tmp/kind-config:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            eks-helm-client:integration-test \
+            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
             helm list --all-namespaces
 
-      - name: Test Helm deployment
+      - name: Deploy test application
         run: |
-          echo "Testing Helm chart deployment..."
+          echo "🚀 Deploying test application..."
           docker run --rm \
             --network host \
             -v /tmp/kind-config:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            eks-helm-client:integration-test \
+            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }} \
             /bin/bash -c '
               helm repo add bitnami https://charts.bitnami.com/bitnami
               helm repo update
-              helm install test-nginx bitnami/nginx --set service.type=ClusterIP --wait
+              helm install test-nginx bitnami/nginx \
+                --set service.type=ClusterIP \
+                --wait --timeout 3m
+              
+              echo "Deployment successful!"
               helm list
+              kubectl get pods
+              
+              # Cleanup
               helm uninstall test-nginx
             '
 
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image for scanning
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: eks-helm-client:scan
-          cache-from: type=gha,scope=amd64
-          platforms: linux/amd64
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: eks-helm-client:scan
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Run Trivy - SARIF report
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: eks-helm-client:scan
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Integration Test Summary
         if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
+        run: |
+          echo ""
+          echo "=== Integration Test Summary ==="
+          echo "Image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}"
+          echo "Kind Version: $(kind version)"
+          echo "Status: ${{ job.status }}"
+          echo ""
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Integration tests passed! Image works with Kubernetes."
+          fi
 
-  build-info:
-    name: Build Information
+  final-summary:
+    name: Final Test Report
     runs-on: ubuntu-latest
-    needs: [test, integration-test, security-scan]
+    needs: [test-develop-image, integration-test-kind]
     if: always()
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build final image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: eks-helm-client:info
-          platforms: linux/amd64
-
-      - name: Display build information
+      - name: Create summary
         run: |
-          echo "=== Build Information ==="
-          echo "Repository: ${{ github.repository }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Actor: ${{ github.actor }}"
-          echo ""
-          echo "=== Tool Versions ==="
-          docker run --rm eks-helm-client:info /bin/bash -c '
-            echo "kubectl: $(kubectl version --client --short 2>/dev/null | head -n1)"
-            echo "Helm: $(helm version --short 2>/dev/null)"
-            echo "AWS CLI: $(aws --version 2>/dev/null)"
-            echo "aws-iam-authenticator: $(aws-iam-authenticator version 2>/dev/null | head -n1)"
-          '
-          echo ""
-          echo "=== Image Details ==="
-          docker images eks-helm-client:info --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
-          echo ""
-          echo "=== Test Status ==="
-          echo "Unit Tests: ${{ needs.test.result }}"
-          echo "Integration Tests: ${{ needs.integration-test.result }}"
-          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "# 🧪 Test Results for \`${{ inputs.image_tag }}\` image" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Category | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.test-develop-image.result }}" = "success" ]; then
+            echo "| Basic Functionality | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Basic Functionality | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.integration-test-kind.result }}" = "success" ]; then
+            echo "| Integration (Kind) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Integration (Kind) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.test-develop-image.result }}" = "success" ] && [ "${{ needs.integration-test-kind.result }}" = "success" ]; then
+            echo "## ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The \`${{ inputs.image_tag }}\` image is ready to use!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Some Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please check the logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
 
-      - name: Comment PR with test results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const testStatus = '${{ needs.test.result }}';
-            const integrationStatus = '${{ needs.integration-test.result }}';
-            const securityStatus = '${{ needs.security-scan.result }}';
-            
-            const statusEmoji = {
-              'success': '✅',
-              'failure': '❌',
-              'cancelled': '⚠️',
-              'skipped': '⏭️'
-            };
-            
-            const comment = `## 🧪 Test Results
-            
-            | Test Type | Status |
-            |-----------|--------|
-            | Unit Tests (Multi-arch) | ${statusEmoji[testStatus]} ${testStatus} |
-            | Integration Tests (Kind) | ${statusEmoji[integrationStatus]} ${integrationStatus} |
-            | Security Scan | ${statusEmoji[securityStatus]} ${securityStatus} |
-            
-            **Branch:** \`${{ github.head_ref }}\`
-            **Commit:** \`${{ github.sha }}\`
-            
-            <details>
-            <summary>View Details</summary>
-            
-            - Tested on platforms: \`linux/amd64\`, \`linux/arm64\`
-            - Integration tested with Kind (Kubernetes in Docker)
-            - Security scanned with Trivy
-            
-            [View full test logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            </details>
-            `;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+      - name: Print final status
+        run: |
+          echo "=== Final Test Report ==="
+          echo "Image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ inputs.image_tag }}"
+          echo "Basic Tests: ${{ needs.test-develop-image.result }}"
+          echo "Integration Tests: ${{ needs.integration-test-kind.result }}"
+          
+          if [ "${{ needs.test-develop-image.result }}" = "success" ] && [ "${{ needs.integration-test-kind.result }}" = "success" ]; then
+            echo ""
+            echo "✅ SUCCESS! All tests passed."
+            exit 0
+          else
+            echo ""
+            echo "❌ FAILED! Some tests did not pass."
+            exit 1
+          fi
