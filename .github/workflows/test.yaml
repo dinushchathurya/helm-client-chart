@@ -15,6 +15,8 @@ on:
   push:
     branches:
       - develop
+      - main
+      - master
   pull_request:
     branches:
       - develop
@@ -25,17 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Determine image tag
-        id: image_tag
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.image_tag }}"
-          else
-            TAG="develop"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "🐳 Testing image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:$TAG"
-
       - name: Pull Docker image
         run: |
           echo "📥 Pulling public image..."
