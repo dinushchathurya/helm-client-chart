@@ -17,6 +17,8 @@ on:
       - develop
       - main
       - master
+    paths: 
+        - '.github/workflows/test.yaml'
   pull_request:
     branches:
       - develop
