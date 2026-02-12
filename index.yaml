@@ -3,7 +3,7 @@ entries:
   tomcat-chart:
   - apiVersion: v2
     appVersion: 1.16.0
-    created: "2026-02-04T15:30:08.416422032Z"
+    created: "2026-02-12T14:38:47.588174892Z"
     description: A Helm chart for tomcat
     digest: 1d1a8a4b3f202584aff29a3c55ae82211cd860a73694c1575d70f94de84f0e97
     name: tomcat-chart
@@ -151,4 +151,4 @@ entries:
     urls:
     - tomcat-chart-v0.1.1-1.tgz
     version: v0.1.1-1
-generated: "2026-02-04T15:30:08.410537221Z"
+generated: "2026-02-12T14:38:47.581678098Z"
