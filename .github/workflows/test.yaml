@@ -33,22 +33,22 @@ jobs:
     
     steps:
       # Step 1: Determine which image tag to test
-      - name: Determine image tag
-        id: image_tag
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.image_tag }}"
-          else
-            TAG="develop-26470ef"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "🐳 Testing image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:$TAG"
+    #   - name: Determine image tag
+    #     id: image_tag
+    #     run: |
+    #       if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+    #         TAG="${{ github.event.inputs.image_tag }}"
+    #       else
+    #         TAG="develop-26470ef"
+    #       fi
+    #       echo "tag=$TAG" >> $GITHUB_OUTPUT
+    #       echo "🐳 Testing image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:$TAG"
 
       # Step 2: Pull the published image (public image, no login needed)
       - name: Pull Docker image from Docker Hub
         run: |
           echo "📥 Pulling image from Docker Hub..."
-          docker pull ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }}
+          docker pull projectoss/eks-helm-client:develop-26470ef
           docker images | grep eks-helm-client
           echo "✅ Image pulled successfully"
 
@@ -76,7 +76,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             kubectl version --client
 
       # Step 7: Test kubectl cluster-info
@@ -87,7 +87,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             kubectl cluster-info
 
       # Step 8: Test kubectl get nodes
@@ -98,7 +98,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             kubectl get nodes -o wide
 
       # Step 9: Test kubectl get all resources
@@ -109,7 +109,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             kubectl get all --all-namespaces
 
       # Step 10: Create test namespace
@@ -120,7 +120,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             kubectl create namespace test-namespace
           
           echo "✅ Namespace created"
@@ -133,7 +133,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             helm version
 
       # Step 12: Add Helm repositories
@@ -144,7 +144,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               helm repo add bitnami https://charts.bitnami.com/bitnami
               helm repo add stable https://charts.helm.sh/stable
@@ -160,7 +160,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             helm search repo bitnami/nginx
 
       # Step 14: Deploy application with Helm
@@ -171,7 +171,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               helm install test-nginx bitnami/nginx \
                 --namespace test-namespace \
@@ -190,7 +190,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               echo "=== Pods ==="
               kubectl get pods -n test-namespace
@@ -213,7 +213,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               helm upgrade test-nginx bitnami/nginx \
                 --namespace test-namespace \
@@ -233,7 +233,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               POD_NAME=$(kubectl get pods -n test-namespace -o jsonpath="{.items[0].metadata.name}")
               echo "Describing pod: $POD_NAME"
@@ -248,7 +248,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               POD_NAME=$(kubectl get pods -n test-namespace -o jsonpath="{.items[0].metadata.name}")
               echo "Getting logs from pod: $POD_NAME"
@@ -263,7 +263,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               kubectl create configmap test-config --from-literal=key1=value1 -n test-namespace
               kubectl create secret generic test-secret --from-literal=password=secret123 -n test-namespace
@@ -285,7 +285,7 @@ jobs:
             --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
-            ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }} \
+            projectoss/eks-helm-client:develop-26470ef \
             /bin/bash -c '
               helm uninstall test-nginx -n test-namespace || true
               kubectl delete namespace test-namespace || true
@@ -303,7 +303,7 @@ jobs:
           echo "======================================"
           echo "       TEST SUMMARY"
           echo "======================================"
-          echo "Image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }}"
+          echo "Image: projectoss/eks-helm-client:develop-26470ef"
           echo "Status: ${{ job.status }}"
           echo "======================================"
           echo ""
@@ -338,7 +338,7 @@ jobs:
         run: |
           echo "# 🧪 Kubernetes Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ secrets.DOCKER_REPO }}/eks-helm-client:${{ steps.image_tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`projectoss/eks-helm-client:develop-26470ef\`" >> $GITHUB_STEP_SUMMARY
           echo "**Cluster:** Kind (Kubernetes in Docker)" >> $GITHUB_STEP_SUMMARY
           echo "**Date:** $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
