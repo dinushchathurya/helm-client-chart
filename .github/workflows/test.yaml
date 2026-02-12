@@ -39,7 +39,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.image_tag }}"
           else
-            TAG="develop"
+            TAG="develop-26470ef"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "🐳 Testing image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:$TAG"
