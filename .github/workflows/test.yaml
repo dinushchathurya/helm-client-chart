@@ -187,7 +187,7 @@ jobs:
       - name: GitHub Summary
         if: always()
         run: |
-          echo "# 🧪 Kubernetes Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "# Kubernetes Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`projectoss/eks-helm-client:develop-26470ef\`" >> $GITHUB_STEP_SUMMARY
           echo "**Cluster:** Kind (Kubernetes in Docker)" >> $GITHUB_STEP_SUMMARY
