@@ -24,7 +24,7 @@ jobs:
           echo "Generated version: $VERSION"
 
       - name: Package Helm Chart
-        uses: docker://projectoss/helm-client:dev-6f0b4c7
+        uses: docker://projectoss/helm-client:latest
         with:
           run: |
             helm version
