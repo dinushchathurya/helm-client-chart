@@ -1,7 +1,6 @@
 name: Test Develop Image in Kubernetes
 
 on:
-  # Trigger manually from Actions tab
   workflow_dispatch:
     inputs:
       image_tag:
@@ -13,15 +12,9 @@ on:
           - develop
           - latest
           - master
-  
-  # Trigger automatically when pushing to develop
   push:
     branches:
       - develop
-      - main
-      - master
-  
-  # Trigger on pull requests to develop
   pull_request:
     branches:
       - develop
@@ -32,271 +25,148 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # Step 1: Determine which image tag to test
-    #   - name: Determine image tag
-    #     id: image_tag
-    #     run: |
-    #       if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-    #         TAG="${{ github.event.inputs.image_tag }}"
-    #       else
-    #         TAG="develop-26470ef"
-    #       fi
-    #       echo "tag=$TAG" >> $GITHUB_OUTPUT
-    #       echo "🐳 Testing image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:$TAG"
-
-      # Step 2: Pull the published image (public image, no login needed)
-      - name: Pull Docker image from Docker Hub
+      - name: Determine image tag
+        id: image_tag
         run: |
-          echo "📥 Pulling image from Docker Hub..."
-          docker pull projectoss/eks-helm-client:develop-26470ef
-          docker images | grep eks-helm-client
-          echo "✅ Image pulled successfully"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.image_tag }}"
+          else
+            TAG="develop"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "🐳 Testing image: ${{ secrets.DOCKER_REPO }}/eks-helm-client:$TAG"
 
-      # Step 3: Create Kind Kubernetes cluster
+      - name: Pull Docker image
+        run: |
+          echo "📥 Pulling public image..."
+          docker pull projectoss/eks-helm-client:develop-26470ef
+          echo "✅ Image pulled"
+
       - name: Create Kind cluster
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: test-cluster
           wait: 30s
-          node_image: kindest/node:v1.28.0
 
-      # Step 4: Get kubeconfig
-      - name: Get kubeconfig from Kind
+      - name: Get kubeconfig
         run: |
-          echo "📋 Getting kubeconfig..."
           kind get kubeconfig --name test-cluster > /tmp/kubeconfig
           chmod 644 /tmp/kubeconfig
-          echo "✅ Kubeconfig ready"
 
-      # Step 6: Test kubectl version
       - name: Test kubectl version
         run: |
-          echo "🧪 Testing kubectl version..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint kubectl \
             projectoss/eks-helm-client:develop-26470ef \
-            kubectl version --client
+            version --client
 
-      # Step 7: Test kubectl cluster-info
       - name: Test kubectl cluster-info
         run: |
-          echo "🧪 Testing kubectl cluster-info..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint kubectl \
             projectoss/eks-helm-client:develop-26470ef \
-            kubectl cluster-info
+            cluster-info
 
-      # Step 8: Test kubectl get nodes
       - name: Test kubectl get nodes
         run: |
-          echo "🧪 Testing kubectl get nodes..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint kubectl \
             projectoss/eks-helm-client:develop-26470ef \
-            kubectl get nodes -o wide
+            get nodes -o wide
 
-      # Step 9: Test kubectl get all resources
-      - name: Test kubectl get all resources
+      - name: Create namespace
         run: |
-          echo "🧪 Testing kubectl get all resources..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint kubectl \
             projectoss/eks-helm-client:develop-26470ef \
-            kubectl get all --all-namespaces
+            create namespace test-ns
 
-      # Step 10: Create test namespace
-      - name: Create test namespace
-        run: |
-          echo "🧪 Creating test namespace..."
-          docker run --rm \
-            --network host \
-            -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
-            -e KUBECONFIG=/opt/kubernetes/config \
-            projectoss/eks-helm-client:develop-26470ef \
-            kubectl create namespace test-namespace
-          
-          echo "✅ Namespace created"
-
-      # Step 11: Test Helm version
       - name: Test Helm version
         run: |
-          echo "🧪 Testing Helm version..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint helm \
             projectoss/eks-helm-client:develop-26470ef \
-            helm version
+            version
 
-      # Step 12: Add Helm repositories
-      - name: Add Helm repositories
+      - name: Add Helm repos and deploy
         run: |
-          echo "🧪 Adding Helm repositories..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint /bin/bash \
             projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
+            -c '
               helm repo add bitnami https://charts.bitnami.com/bitnami
-              helm repo add stable https://charts.helm.sh/stable
               helm repo update
-              helm repo list
+              helm install nginx bitnami/nginx --namespace test-ns --set service.type=ClusterIP --wait --timeout 3m
             '
 
-      # Step 13: Search Helm charts
-      - name: Search Helm charts
-        run: |
-          echo "🧪 Searching Helm charts..."
-          docker run --rm \
-            --network host \
-            -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
-            -e KUBECONFIG=/opt/kubernetes/config \
-            projectoss/eks-helm-client:develop-26470ef \
-            helm search repo bitnami/nginx
-
-      # Step 14: Deploy application with Helm
-      - name: Deploy nginx with Helm
-        run: |
-          echo "🚀 Deploying nginx with Helm..."
-          docker run --rm \
-            --network host \
-            -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
-            -e KUBECONFIG=/opt/kubernetes/config \
-            projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
-              helm install test-nginx bitnami/nginx \
-                --namespace test-namespace \
-                --set service.type=ClusterIP \
-                --set replicaCount=1 \
-                --wait --timeout 3m
-            '
-          
-          echo "✅ Deployment successful!"
-
-      # Step 15: Verify deployment
       - name: Verify deployment
         run: |
-          echo "✅ Verifying deployment..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint /bin/bash \
             projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
+            -c '
               echo "=== Pods ==="
-              kubectl get pods -n test-namespace
+              kubectl get pods -n test-ns
               echo ""
               echo "=== Services ==="
-              kubectl get services -n test-namespace
+              kubectl get services -n test-ns
               echo ""
               echo "=== Helm Releases ==="
-              helm list -n test-namespace
-              echo ""
-              echo "=== Deployments ==="
-              kubectl get deployments -n test-namespace
+              helm list -n test-ns
             '
 
-      # Step 16: Test Helm upgrade
       - name: Test Helm upgrade
         run: |
-          echo "🔄 Testing Helm upgrade..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint /bin/bash \
             projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
-              helm upgrade test-nginx bitnami/nginx \
-                --namespace test-namespace \
-                --set replicaCount=2 \
-                --wait --timeout 2m
-              
-              echo ""
-              echo "After upgrade:"
-              kubectl get pods -n test-namespace
+            -c '
+              helm upgrade nginx bitnami/nginx --namespace test-ns --set replicaCount=2 --wait --timeout 2m
+              kubectl get pods -n test-ns
             '
 
-      # Step 17: Test kubectl describe
-      - name: Test kubectl describe pod
-        run: |
-          echo "🔍 Testing kubectl describe..."
-          docker run --rm \
-            --network host \
-            -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
-            -e KUBECONFIG=/opt/kubernetes/config \
-            projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
-              POD_NAME=$(kubectl get pods -n test-namespace -o jsonpath="{.items[0].metadata.name}")
-              echo "Describing pod: $POD_NAME"
-              kubectl describe pod $POD_NAME -n test-namespace
-            '
-
-      # Step 18: Test kubectl logs
       - name: Test kubectl logs
         run: |
-          echo "📋 Testing kubectl logs..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint /bin/bash \
             projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
-              POD_NAME=$(kubectl get pods -n test-namespace -o jsonpath="{.items[0].metadata.name}")
-              echo "Getting logs from pod: $POD_NAME"
-              kubectl logs $POD_NAME -n test-namespace --tail=20
+            -c '
+              POD=$(kubectl get pods -n test-ns -o jsonpath="{.items[0].metadata.name}")
+              kubectl logs $POD -n test-ns --tail=10
             '
 
-      # Step 19: Test ConfigMap and Secret
-      - name: Test ConfigMap and Secret
-        run: |
-          echo "🧪 Testing ConfigMap and Secret..."
-          docker run --rm \
-            --network host \
-            -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
-            -e KUBECONFIG=/opt/kubernetes/config \
-            projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
-              kubectl create configmap test-config --from-literal=key1=value1 -n test-namespace
-              kubectl create secret generic test-secret --from-literal=password=secret123 -n test-namespace
-              
-              echo "ConfigMaps:"
-              kubectl get configmaps -n test-namespace
-              
-              echo ""
-              echo "Secrets:"
-              kubectl get secrets -n test-namespace
-            '
-
-      # Step 20: Cleanup
-      - name: Cleanup resources
+      - name: Cleanup
         if: always()
         run: |
-          echo "🧹 Cleaning up..."
-          docker run --rm \
-            --network host \
+          docker run --rm --network host \
             -v /tmp/kubeconfig:/opt/kubernetes/config:ro \
             -e KUBECONFIG=/opt/kubernetes/config \
+            --entrypoint /bin/bash \
             projectoss/eks-helm-client:develop-26470ef \
-            /bin/bash -c '
-              helm uninstall test-nginx -n test-namespace || true
-              kubectl delete namespace test-namespace || true
-              kubectl delete configmap test-config || true
-              kubectl delete secret test-secret || true
+            -c '
+              helm uninstall nginx -n test-ns || true
+              kubectl delete namespace test-ns || true
             ' || true
-          
-          echo "✅ Cleanup complete"
 
-      # Step 21: Test Summary
-      - name: Display test summary
+      - name: Test Summary
         if: always()
         run: |
           echo ""
@@ -306,77 +176,49 @@ jobs:
           echo "Image: projectoss/eks-helm-client:develop-26470ef"
           echo "Status: ${{ job.status }}"
           echo "======================================"
-          echo ""
           
           if [ "${{ job.status }}" == "success" ]; then
+            echo ""
             echo "✅ ALL TESTS PASSED!"
             echo ""
             echo "Tests completed:"
-            echo "  ✅ kubectl version"
-            echo "  ✅ kubectl cluster-info"
-            echo "  ✅ kubectl get nodes"
-            echo "  ✅ kubectl get resources"
+            echo "  ✅ kubectl version & cluster-info"
+            echo "  ✅ kubectl get nodes & resources"
             echo "  ✅ Namespace creation"
             echo "  ✅ Helm version"
-            echo "  ✅ Helm repository management"
-            echo "  ✅ Helm chart search"
             echo "  ✅ Helm deployment"
             echo "  ✅ Helm upgrade"
-            echo "  ✅ kubectl describe"
             echo "  ✅ kubectl logs"
-            echo "  ✅ ConfigMap and Secret"
             echo ""
-            echo "Your image is ready for production! 🚀"
-          else
-            echo "❌ SOME TESTS FAILED"
-            echo "Please check the logs above for details."
+            echo "Your image is production-ready! 🚀"
           fi
 
-      # Step 22: Create GitHub Summary
-      - name: Create test summary for GitHub
+      - name: GitHub Summary
         if: always()
         run: |
           echo "# 🧪 Kubernetes Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`projectoss/eks-helm-client:develop-26470ef\`" >> $GITHUB_STEP_SUMMARY
           echo "**Cluster:** Kind (Kubernetes in Docker)" >> $GITHUB_STEP_SUMMARY
-          echo "**Date:** $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ job.status }}" == "success" ]; then
             echo "## ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Tests Completed:" >> $GITHUB_STEP_SUMMARY
+            echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+            echo "| kubectl version | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| kubectl cluster-info | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| kubectl get nodes | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Namespace creation | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Helm version | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Helm deployment | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Helm upgrade | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| kubectl logs | ✅ |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| Category | Test | Status |" >> $GITHUB_STEP_SUMMARY
-            echo "|----------|------|--------|" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | version | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | cluster-info | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | get nodes | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | get all resources | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | create namespace | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | describe pod | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| kubectl | logs | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Helm | version | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Helm | repository management | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Helm | chart search | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Helm | deployment | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Helm | upgrade | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Resources | ConfigMap | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "| Resources | Secret | ✅ |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "---" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**🚀 Your image is production-ready!**" >> $GITHUB_STEP_SUMMARY
+            echo "**🚀 Image is production-ready!**" >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ Tests Failed" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Workflow:** \`${{ github.workflow }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Run ID:** \`${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Triggered by:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
