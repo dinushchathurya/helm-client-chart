@@ -11,17 +11,20 @@ on:
         options:
           - develop
           - latest
-         
+          - master
   push:
     branches:
       - develop
       - main
+      - master
       
     paths: 
         - '.github/workflows/test.yaml'
   pull_request:
     branches:
       - develop
+      - master
+      - main
 
 jobs:
   test-kubernetes:
