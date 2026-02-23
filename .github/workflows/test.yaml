@@ -11,17 +11,20 @@ on:
         options:
           - develop
           - latest
-         
+          - master
   push:
     branches:
       - develop
       - main
+      - master
       
     paths: 
         - '.github/workflows/test.yaml'
   pull_request:
     branches:
       - develop
+      - master
+      - main
 
 jobs:
   test-kubernetes:
@@ -32,7 +35,7 @@ jobs:
       - name: Pull Docker image
         run: |
           echo "📥 Pulling public image..."
-          docker pull projectoss/eks-helm-client:develop-26470ef
+          docker pull projectoss/eks-helm-client:latest
           echo "✅ Image pulled"
 
       - name: Create Kind cluster
